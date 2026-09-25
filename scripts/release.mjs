@@ -22,6 +22,11 @@ pkg.version = version;
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 run('npm install --package-lock-only --ignore-scripts');
 run('git add -A package.json package-lock.json dist');
-run(`git commit -m "Release v${version}"`);
+// nothing to commit when dist/ and the version were already up to date
+try {
+  execSync('git diff --cached --quiet');
+} catch {
+  run(`git commit -m "Release v${version}"`);
+}
 run(`git tag v${version}`);
 console.log(`\nTagged v${version}. Push with: git push && git push origin v${version}`);
