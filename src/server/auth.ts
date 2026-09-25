@@ -30,6 +30,8 @@ export type VerifyResult = { ok: true; token: string; user: User } | { ok: false
 export interface AuthOptions {
   /** Game name shown in the email, e.g. "SCOUT". */
   brand: string;
+  /** Background of the code box in the email, #rrggbb. */
+  mailAccent?: string;
   /**
    * Secret used when SESSION_SECRET is unset outside production, so you stay
    * logged in across `tsx watch` restarts. Keep the value a game already used.
@@ -102,6 +104,7 @@ interface Challenge {
 export function createAuth(options: AuthOptions): Auth {
   const env = options.env ?? process.env;
   const brand = options.brand;
+  const accent = options.mailAccent;
   const slug = brand.toLowerCase().replace(/[^a-z0-9]+/g, '') || 'oink';
 
   /** Emails allowed to create tables; everyone else can only join. Empty = anyone. */
@@ -139,7 +142,7 @@ export function createAuth(options: AuthOptions): Auth {
       const res = await fetch(url, {
         method: 'POST',
         headers: { Authorization: `Bearer ${relaySecret}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, code, brand }),
+        body: JSON.stringify({ to, code, brand, accent }),
         signal: AbortSignal.timeout(15000),
       });
       if (!res.ok) throw new Error(`Relay ${res.status}: ${await res.text()}`);
@@ -152,7 +155,7 @@ export function createAuth(options: AuthOptions): Auth {
   const brevoMailer =
     (apiKey: string): Mailer =>
     async (to, code) => {
-      const mail = loginEmail(brand, code);
+      const mail = loginEmail(brand, code, accent);
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -174,7 +177,7 @@ export function createAuth(options: AuthOptions): Auth {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to, ...loginEmail(brand, code) }),
+        body: JSON.stringify({ from, to, ...loginEmail(brand, code, accent) }),
       });
       if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
     };
@@ -189,7 +192,7 @@ export function createAuth(options: AuthOptions): Auth {
       auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
     });
     return async (to, code) => {
-      await transport.sendMail({ from, to, ...loginEmail(brand, code) });
+      await transport.sendMail({ from, to, ...loginEmail(brand, code, accent) });
     };
   };
 

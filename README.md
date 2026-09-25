@@ -22,7 +22,7 @@ Cài ở chỗ code dùng tới: `server/`, `client/` (hoặc root nếu là Nex
 ```ts
 import { createAuth, authHandler, socketAuth, authError, originPolicy } from 'oink-kit/server';
 
-const auth = createAuth({ brand: 'SCOUT', devSecret: 'scout-dev-secret' });
+const auth = createAuth({ brand: 'SCOUT', devSecret: 'scout-dev-secret', mailAccent: '#f4efe4' });
 const origins = originPolicy(process.env.CLIENT_ORIGIN);
 
 app.set('trust proxy', 1);
@@ -88,7 +88,7 @@ Server game (Render):
 
 Không có cách gửi mail nào và không chạy production: mã được in ra console và trả về client (`devCode`) để test.
 
-Relay "oink-mail" (Vercel, chính repo này): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASS` (App Password của Gmail), `MAIL_FROM`, `MAIL_RELAY_SECRET`. Relay chỉ nhận `{to, code, brand}` với mã đúng 6 số, và `brand` chỉ được là tên game dạng chữ thường.
+Relay "oink-mail" (Vercel, chính repo này): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASS` (App Password của Gmail), `MAIL_FROM`, `MAIL_RELAY_SECRET`. Relay chỉ nhận `{to, code, brand, accent}`: mã phải đúng 6 số, `brand` chỉ được là tên game dạng chữ thường, `accent` là màu `#rrggbb` của ô mã.
 
 ## Phát triển
 

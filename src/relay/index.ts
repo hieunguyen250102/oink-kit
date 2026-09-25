@@ -4,7 +4,7 @@
  * Render's free plan blocks SMTP ports, so the realtime servers keep all the
  * login logic (codes, attempts, cooldowns) and only hand the actual sending
  * to this function over HTTPS. It accepts nothing but an address, a 6-digit
- * code and a plain game name, and builds the message itself, so even a
+ * code, a plain game name and a #rrggbb colour, and builds the message itself, so even a
  * leaked secret cannot turn it into a general-purpose mail relay.
  *
  * Env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_RELAY_SECRET.
@@ -18,13 +18,15 @@ import { cleanBrand, loginEmail } from '../mail/template';
 export interface RelayOptions {
   /** Used when the caller does not name its game. Defaults to "Oink". */
   brand?: string;
+  /** Code-box colour when the caller sends none, #rrggbb. */
+  accent?: string;
   /** Defaults to process.env. */
   env?: NodeJS.ProcessEnv;
 }
 
 type Req = IncomingMessage & { body?: unknown };
 
-export { cleanBrand, loginEmail } from '../mail/template';
+export { cleanAccent, cleanBrand, loginEmail } from '../mail/template';
 export type { LoginEmail } from '../mail/template';
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -92,7 +94,7 @@ export function createSendCodeHandler(options: RelayOptions = {}) {
       await getTransport().sendMail({
         from: env.MAIL_FROM || env.SMTP_USER,
         to,
-        ...loginEmail(cleanBrand(body.brand, fallbackBrand), code),
+        ...loginEmail(cleanBrand(body.brand, fallbackBrand), code, typeof body.accent === 'string' ? body.accent : options.accent),
       });
       return send(res, 200, { ok: true });
     } catch (err) {

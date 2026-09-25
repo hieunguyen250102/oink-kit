@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 
 import { createAuth, authHandler, authError, originPolicy, socketAuth, NEED_LOGIN, NOT_HOST } from '../src/server';
-import { cleanBrand, createSendCodeHandler, loginEmail } from '../src/relay';
+import { cleanAccent, cleanBrand, createSendCodeHandler, loginEmail } from '../src/relay';
 
 const devEnv = (extra: Record<string, string> = {}) => ({ NODE_ENV: 'test', SESSION_SECRET: 's3cret', ...extra });
 
@@ -123,13 +123,14 @@ test('relay mailer posts {to, code, brand} with the bearer secret', async () => 
   await new Promise<void>((r) => relay.listen(0, r));
   const url = `http://127.0.0.1:${(relay.address() as AddressInfo).port}/api/send-code`;
   try {
-    const auth = createAuth({ brand: 'Durian', env: devEnv({ MAIL_RELAY_URL: url, MAIL_RELAY_SECRET: 'rs' }) });
+    const auth = createAuth({ brand: 'Durian', mailAccent: '#fff4d6', env: devEnv({ MAIL_RELAY_URL: url, MAIL_RELAY_SECRET: 'rs' }) });
     assert.equal(auth.mailerName, 'relay');
     const r = await auth.requestCode('p@b.co', 'ip');
     assert.ok(r.ok && !r.devCode);
     assert.equal(seen.auth, 'Bearer rs');
     assert.equal(seen.body.to, 'p@b.co');
     assert.equal(seen.body.brand, 'Durian');
+    assert.equal(seen.body.accent, '#fff4d6');
     assert.match(seen.body.code, /^\d{6}$/);
   } finally {
     relay.close();
@@ -239,6 +240,9 @@ test('email template and brand cleaning', () => {
   const m = loginEmail('SCOUT', '123456');
   assert.equal(m.subject, '123456 là mã đăng nhập SCOUT của bạn');
   assert.match(m.html, /Mã đăng nhập SCOUT/);
+  assert.match(m.html, /background:#f4efe4/);
+  assert.match(loginEmail('Deep Sea', '123456', '#e3f1f0').html, /background:#e3f1f0/);
+  assert.equal(cleanAccent('red;x:url(y)'), '#f4efe4');
 });
 
 test('relay handler checks the secret and the payload', async () => {

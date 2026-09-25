@@ -19,17 +19,26 @@ export function cleanBrand(raw: unknown, fallback: string): string {
   return BRAND_RE.test(brand) ? brand : fallback;
 }
 
+const ACCENT_RE = /^#[0-9a-f]{6}$/i;
+export const DEFAULT_ACCENT = '#f4efe4';
+
+/** Background of the code box; only a plain #rrggbb gets through. */
+export function cleanAccent(raw: unknown): string {
+  return typeof raw === 'string' && ACCENT_RE.test(raw) ? raw : DEFAULT_ACCENT;
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-export function loginEmail(brand: string, code: string): LoginEmail {
+export function loginEmail(brand: string, code: string, accent?: string): LoginEmail {
   const b = escapeHtml(brand);
+  const bg = cleanAccent(accent);
   const text = `Mã đăng nhập ${brand} của bạn: ${code}\n\nMã có hiệu lực trong 10 phút. Nếu bạn không yêu cầu mã này, cứ bỏ qua email.`;
   const html = `<div style="font-family:system-ui,sans-serif;max-width:420px;margin:auto;padding:24px;color:#1b1e24">
   <h2 style="margin:0 0 12px;font-size:18px">Mã đăng nhập ${b}</h2>
   <p style="margin:0 0 16px;color:#555">Nhập mã này vào trang game để vào chơi:</p>
-  <div style="font-size:34px;font-weight:800;letter-spacing:10px;padding:14px 0;text-align:center;background:#f4efe4;border-radius:12px">${code}</div>
+  <div style="font-size:34px;font-weight:800;letter-spacing:10px;padding:14px 0;text-align:center;background:${bg};border-radius:12px">${code}</div>
   <p style="margin:16px 0 0;font-size:13px;color:#888">Mã có hiệu lực trong 10 phút. Nếu bạn không yêu cầu mã này, cứ bỏ qua email.</p>
 </div>`;
   return { subject: `${code} là mã đăng nhập ${brand} của bạn`, text, html };
