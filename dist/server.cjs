@@ -401,7 +401,7 @@ var NOT_HOST = "T\xE0i kho\u1EA3n n\xE0y ch\u1EC9 \u0111\u01B0\u1EE3c v\xE0o b\x
 function authError(user, opts = {}) {
   if (!user) return NEED_LOGIN;
   if (opts.host && !user.canHost) return NOT_HOST;
-  return null;
+  return void 0;
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

@@ -127,11 +127,12 @@ declare function socketUser(socket: {
 declare const NEED_LOGIN = "B\u1EA1n c\u1EA7n \u0111\u0103ng nh\u1EADp tr\u01B0\u1EDBc";
 declare const NOT_HOST = "T\u00E0i kho\u1EA3n n\u00E0y ch\u1EC9 \u0111\u01B0\u1EE3c v\u00E0o b\u00E0n, kh\u00F4ng \u0111\u01B0\u1EE3c t\u1EA1o b\u00E0n";
 /**
- * Why this user may not go on, or null if they may. Pass `{ host: true }`
- * for creating a room; joining only needs a login.
+ * Why this user may not go on, or undefined if they may — so it drops
+ * straight into an ack's `error?: string`. Pass `{ host: true }` for
+ * creating a room; joining only needs a login.
  */
 declare function authError(user: User | null | undefined, opts?: {
     host?: boolean;
-}): string | null;
+}): string | undefined;
 
 export { type Auth, type AuthHandlerOptions, type AuthOptions, NEED_LOGIN, NOT_HOST, type OriginPolicy, type RequestResult, type User, type VerifyResult, authError, authHandler, createAuth, normalizeEmail, originPolicy, socketAuth, socketUser };
