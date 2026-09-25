@@ -1,0 +1,4 @@
+node_modules
+.vercel
+.env
+# dist/ is committed on purpose: games install this repo straight from git
