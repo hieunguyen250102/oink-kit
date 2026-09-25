@@ -3,18 +3,24 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 
 // src/mail/template.ts
+var ACCENT_RE = /^#[0-9a-f]{6}$/i;
+var DEFAULT_ACCENT = "#f4efe4";
+function cleanAccent(raw) {
+  return typeof raw === "string" && ACCENT_RE.test(raw) ? raw : DEFAULT_ACCENT;
+}
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
-function loginEmail(brand, code) {
+function loginEmail(brand, code, accent) {
   const b = escapeHtml(brand);
+  const bg = cleanAccent(accent);
   const text = `M\xE3 \u0111\u0103ng nh\u1EADp ${brand} c\u1EE7a b\u1EA1n: ${code}
 
 M\xE3 c\xF3 hi\u1EC7u l\u1EF1c trong 10 ph\xFAt. N\u1EBFu b\u1EA1n kh\xF4ng y\xEAu c\u1EA7u m\xE3 n\xE0y, c\u1EE9 b\u1ECF qua email.`;
   const html = `<div style="font-family:system-ui,sans-serif;max-width:420px;margin:auto;padding:24px;color:#1b1e24">
   <h2 style="margin:0 0 12px;font-size:18px">M\xE3 \u0111\u0103ng nh\u1EADp ${b}</h2>
   <p style="margin:0 0 16px;color:#555">Nh\u1EADp m\xE3 n\xE0y v\xE0o trang game \u0111\u1EC3 v\xE0o ch\u01A1i:</p>
-  <div style="font-size:34px;font-weight:800;letter-spacing:10px;padding:14px 0;text-align:center;background:#f4efe4;border-radius:12px">${code}</div>
+  <div style="font-size:34px;font-weight:800;letter-spacing:10px;padding:14px 0;text-align:center;background:${bg};border-radius:12px">${code}</div>
   <p style="margin:16px 0 0;font-size:13px;color:#888">M\xE3 c\xF3 hi\u1EC7u l\u1EF1c trong 10 ph\xFAt. N\u1EBFu b\u1EA1n kh\xF4ng y\xEAu c\u1EA7u m\xE3 n\xE0y, c\u1EE9 b\u1ECF qua email.</p>
 </div>`;
   return { subject: `${code} l\xE0 m\xE3 \u0111\u0103ng nh\u1EADp ${brand} c\u1EE7a b\u1EA1n`, text, html };
@@ -49,6 +55,7 @@ function isTimeout(err) {
 function createAuth(options) {
   const env = options.env ?? process.env;
   const brand = options.brand;
+  const accent = options.mailAccent;
   const slug = brand.toLowerCase().replace(/[^a-z0-9]+/g, "") || "oink";
   const hostEmails = new Set(
     (env.HOST_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
@@ -66,13 +73,13 @@ function createAuth(options) {
     const res = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${relaySecret}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to, code, brand }),
+      body: JSON.stringify({ to, code, brand, accent }),
       signal: AbortSignal.timeout(15e3)
     });
     if (!res.ok) throw new Error(`Relay ${res.status}: ${await res.text()}`);
   };
   const brevoMailer = (apiKey) => async (to, code) => {
-    const mail = loginEmail(brand, code);
+    const mail = loginEmail(brand, code, accent);
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: { "api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
@@ -90,7 +97,7 @@ function createAuth(options) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, ...loginEmail(brand, code) })
+      body: JSON.stringify({ from, to, ...loginEmail(brand, code, accent) })
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
   };
@@ -103,7 +110,7 @@ function createAuth(options) {
       auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : void 0
     });
     return async (to, code) => {
-      await transport.sendMail({ from, to, ...loginEmail(brand, code) });
+      await transport.sendMail({ from, to, ...loginEmail(brand, code, accent) });
     };
   };
   const [mailerName, mailer] = env.MAIL_RELAY_URL ? ["relay", relayMailer(env.MAIL_RELAY_URL, env.MAIL_RELAY_SECRET ?? "")] : env.BREVO_API_KEY ? ["brevo", brevoMailer(env.BREVO_API_KEY)] : env.RESEND_API_KEY ? ["resend", resendMailer(env.RESEND_API_KEY)] : env.SMTP_HOST ? ["smtp", smtpMailer()] : [isProd ? "none" : "console", null];

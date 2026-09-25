@@ -9,18 +9,24 @@ function cleanBrand(raw, fallback) {
   const brand = raw.trim();
   return BRAND_RE.test(brand) ? brand : fallback;
 }
+var ACCENT_RE = /^#[0-9a-f]{6}$/i;
+var DEFAULT_ACCENT = "#f4efe4";
+function cleanAccent(raw) {
+  return typeof raw === "string" && ACCENT_RE.test(raw) ? raw : DEFAULT_ACCENT;
+}
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
-function loginEmail(brand, code) {
+function loginEmail(brand, code, accent) {
   const b = escapeHtml(brand);
+  const bg = cleanAccent(accent);
   const text = `M\xE3 \u0111\u0103ng nh\u1EADp ${brand} c\u1EE7a b\u1EA1n: ${code}
 
 M\xE3 c\xF3 hi\u1EC7u l\u1EF1c trong 10 ph\xFAt. N\u1EBFu b\u1EA1n kh\xF4ng y\xEAu c\u1EA7u m\xE3 n\xE0y, c\u1EE9 b\u1ECF qua email.`;
   const html = `<div style="font-family:system-ui,sans-serif;max-width:420px;margin:auto;padding:24px;color:#1b1e24">
   <h2 style="margin:0 0 12px;font-size:18px">M\xE3 \u0111\u0103ng nh\u1EADp ${b}</h2>
   <p style="margin:0 0 16px;color:#555">Nh\u1EADp m\xE3 n\xE0y v\xE0o trang game \u0111\u1EC3 v\xE0o ch\u01A1i:</p>
-  <div style="font-size:34px;font-weight:800;letter-spacing:10px;padding:14px 0;text-align:center;background:#f4efe4;border-radius:12px">${code}</div>
+  <div style="font-size:34px;font-weight:800;letter-spacing:10px;padding:14px 0;text-align:center;background:${bg};border-radius:12px">${code}</div>
   <p style="margin:16px 0 0;font-size:13px;color:#888">M\xE3 c\xF3 hi\u1EC7u l\u1EF1c trong 10 ph\xFAt. N\u1EBFu b\u1EA1n kh\xF4ng y\xEAu c\u1EA7u m\xE3 n\xE0y, c\u1EE9 b\u1ECF qua email.</p>
 </div>`;
   return { subject: `${code} l\xE0 m\xE3 \u0111\u0103ng nh\u1EADp ${brand} c\u1EE7a b\u1EA1n`, text, html };
@@ -85,7 +91,7 @@ function createSendCodeHandler(options = {}) {
       await getTransport().sendMail({
         from: env.MAIL_FROM || env.SMTP_USER,
         to,
-        ...loginEmail(cleanBrand(body.brand, fallbackBrand), code)
+        ...loginEmail(cleanBrand(body.brand, fallbackBrand), code, typeof body.accent === "string" ? body.accent : options.accent)
       });
       return send(res, 200, { ok: true });
     } catch (err) {
@@ -95,6 +101,7 @@ function createSendCodeHandler(options = {}) {
   };
 }
 export {
+  cleanAccent,
   cleanBrand,
   createSendCodeHandler,
   loginEmail

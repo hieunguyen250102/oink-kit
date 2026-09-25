@@ -38,6 +38,8 @@ type VerifyResult = {
 interface AuthOptions {
     /** Game name shown in the email, e.g. "SCOUT". */
     brand: string;
+    /** Background of the code box in the email, #rrggbb. */
+    mailAccent?: string;
     /**
      * Secret used when SESSION_SECRET is unset outside production, so you stay
      * logged in across `tsx watch` restarts. Keep the value a game already used.
