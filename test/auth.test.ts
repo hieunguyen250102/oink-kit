@@ -100,9 +100,9 @@ test('HOST_EMAILS restricts hosting', async () => {
   assert.equal(boss.user.canHost, true);
   assert.equal(guest.user.canHost, false);
   assert.equal(authError(null), NEED_LOGIN);
-  assert.equal(authError(guest.user), null);
+  assert.equal(authError(guest.user), undefined);
   assert.equal(authError(guest.user, { host: true }), NOT_HOST);
-  assert.equal(authError(boss.user, { host: true }), null);
+  assert.equal(authError(boss.user, { host: true }), undefined);
 });
 
 test('production without a mailer refuses to log anyone in', async () => {

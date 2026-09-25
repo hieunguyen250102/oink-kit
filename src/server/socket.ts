@@ -30,11 +30,12 @@ export const NEED_LOGIN = 'Bạn cần đăng nhập trước';
 export const NOT_HOST = 'Tài khoản này chỉ được vào bàn, không được tạo bàn';
 
 /**
- * Why this user may not go on, or null if they may. Pass `{ host: true }`
- * for creating a room; joining only needs a login.
+ * Why this user may not go on, or undefined if they may — so it drops
+ * straight into an ack's `error?: string`. Pass `{ host: true }` for
+ * creating a room; joining only needs a login.
  */
-export function authError(user: User | null | undefined, opts: { host?: boolean } = {}): string | null {
+export function authError(user: User | null | undefined, opts: { host?: boolean } = {}): string | undefined {
   if (!user) return NEED_LOGIN;
   if (opts.host && !user.canHost) return NOT_HOST;
-  return null;
+  return undefined;
 }
