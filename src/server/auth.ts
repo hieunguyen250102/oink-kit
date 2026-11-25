@@ -55,6 +55,10 @@ export interface Auth {
   mailerName: string;
 }
 
+/** requestCode's answer for an address that is not in HOST_EMAILS. */
+export const NOT_A_HOST_EMAIL =
+  'Email này không có quyền tạo phòng. Người chơi không cần đăng nhập: chỉ cần nhập tên và mã phòng để vào.';
+
 const CODE_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -63,6 +67,18 @@ const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Per-IP budget, so the endpoint cannot be used to spam arbitrary inboxes. */
 const IP_WINDOW_MS = 60 * 60 * 1000;
 const IP_MAX = 12;
+
+/**
+ * The seat id of a player who joined without logging in. The browser keeps a
+ * random key that never leaves it except in the socket handshake; only this
+ * hash of it is ever shown to other players, so nobody can take over a seat
+ * by copying the id from the room state. No secret needed, and it survives a
+ * SESSION_SECRET change.
+ */
+export function guestId(rawKey: unknown): string | null {
+  if (typeof rawKey !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(rawKey)) return null;
+  return 'g_' + crypto.createHash('sha256').update(`guest:${rawKey}`).digest('base64url').slice(0, 16);
+}
 
 export function normalizeEmail(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
@@ -268,6 +284,9 @@ export function createAuth(options: AuthOptions): Auth {
   async function requestCode(rawEmail: unknown, ip: string): Promise<RequestResult> {
     const email = normalizeEmail(rawEmail);
     if (!email) return { ok: false, error: 'Email không hợp lệ' };
+    // Joining needs no login, so only a host has a reason to sign in. Mailing
+    // anyone else would just spend the mail quota (and spam their inbox).
+    if (!canHost(email)) return { ok: false, error: NOT_A_HOST_EMAIL };
     if (!mailer && !devMode) return { ok: false, error: 'Máy chủ chưa cấu hình gửi email' };
 
     const now = Date.now();

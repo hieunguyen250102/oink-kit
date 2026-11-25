@@ -27,12 +27,17 @@ M\xE3 c\xF3 hi\u1EC7u l\u1EF1c trong 10 ph\xFAt. N\u1EBFu b\u1EA1n kh\xF4ng y\xE
 }
 
 // src/server/auth.ts
+var NOT_A_HOST_EMAIL = "Email n\xE0y kh\xF4ng c\xF3 quy\u1EC1n t\u1EA1o ph\xF2ng. Ng\u01B0\u1EDDi ch\u01A1i kh\xF4ng c\u1EA7n \u0111\u0103ng nh\u1EADp: ch\u1EC9 c\u1EA7n nh\u1EADp t\xEAn v\xE0 m\xE3 ph\xF2ng \u0111\u1EC3 v\xE0o.";
 var CODE_TTL_MS = 10 * 60 * 1e3;
 var RESEND_COOLDOWN_MS = 60 * 1e3;
 var MAX_ATTEMPTS = 5;
 var TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
 var IP_WINDOW_MS = 60 * 60 * 1e3;
 var IP_MAX = 12;
+function guestId(rawKey) {
+  if (typeof rawKey !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(rawKey)) return null;
+  return "g_" + crypto.createHash("sha256").update(`guest:${rawKey}`).digest("base64url").slice(0, 16);
+}
 function normalizeEmail(raw) {
   if (typeof raw !== "string") return null;
   const email = raw.trim().toLowerCase();
@@ -150,6 +155,7 @@ function createAuth(options) {
   async function requestCode(rawEmail, ip) {
     const email = normalizeEmail(rawEmail);
     if (!email) return { ok: false, error: "Email kh\xF4ng h\u1EE3p l\u1EC7" };
+    if (!canHost(email)) return { ok: false, error: NOT_A_HOST_EMAIL };
     if (!mailer && !devMode) return { ok: false, error: "M\xE1y ch\u1EE7 ch\u01B0a c\u1EA5u h\xECnh g\u1EEDi email" };
     const now = Date.now();
     const sentAt = lastSent.get(email);
@@ -345,6 +351,7 @@ function socketAuth(auth) {
   return (socket, next) => {
     const data = socket.data ?? {};
     data.user = auth.verifyToken(socket.handshake.auth?.token);
+    data.guestId = guestId(socket.handshake.auth?.guest);
     socket.data = data;
     next();
   };
@@ -352,8 +359,13 @@ function socketAuth(auth) {
 function socketUser(socket) {
   return socket.data?.user ?? null;
 }
-var NEED_LOGIN = "B\u1EA1n c\u1EA7n \u0111\u0103ng nh\u1EADp tr\u01B0\u1EDBc";
+function seatId(socket) {
+  const data = socket.data;
+  return data?.user?.id ?? data?.guestId ?? null;
+}
+var NEED_LOGIN = "Ch\u1EC9 ch\u1EE7 ph\xF2ng m\u1EDBi t\u1EA1o \u0111\u01B0\u1EE3c ph\xF2ng \u2014 h\xE3y \u0111\u0103ng nh\u1EADp b\u1EB1ng email ch\u1EE7 ph\xF2ng";
 var NOT_HOST = "T\xE0i kho\u1EA3n n\xE0y ch\u1EC9 \u0111\u01B0\u1EE3c v\xE0o b\xE0n, kh\xF4ng \u0111\u01B0\u1EE3c t\u1EA1o b\xE0n";
+var NO_SEAT = "Trang \u0111\xE3 c\u0169, h\xE3y t\u1EA3i l\u1EA1i trang r\u1ED3i v\xE0o l\u1EA1i";
 function authError(user, opts = {}) {
   if (!user) return NEED_LOGIN;
   if (opts.host && !user.canHost) return NOT_HOST;
@@ -361,12 +373,16 @@ function authError(user, opts = {}) {
 }
 export {
   NEED_LOGIN,
+  NOT_A_HOST_EMAIL,
   NOT_HOST,
+  NO_SEAT,
   authError,
   authHandler,
   createAuth,
+  guestId,
   normalizeEmail,
   originPolicy,
+  seatId,
   socketAuth,
   socketUser
 };

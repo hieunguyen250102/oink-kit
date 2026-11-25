@@ -1,7 +1,9 @@
 /**
  * Browser side of the email login: the stored session, the "code is on its
- * way" state that survives a reload, and the two HTTP calls.
+ * way" state that survives a reload, and the two HTTP calls. Only a host
+ * logs in; everyone else joins as a guest with a key kept in this browser.
  */
+
 interface SessionUser {
     id: string;
     email: string;
@@ -40,11 +42,18 @@ interface AuthClient {
     requestLoginCode(email: string): Promise<RequestCodeResponse>;
     verifyLoginCode(email: string, code: string, challenge: string): Promise<VerifyCodeResponse>;
     /**
+     * This browser's guest key: random, made once and kept. It decides which
+     * seat a player who did not log in gets back after a reload. Never show it
+     * to others — the server only ever shares a hash of it.
+     */
+    guestKey(): string;
+    /**
      * For `io(url, { auth: authClient.socketAuth })`. Socket.IO calls it on
      * every (re)connect, so a fresh login takes effect on the next handshake.
      */
     socketAuth(cb: (data: {
         token: string | null;
+        guest: string;
     }) => void): void;
 }
 

@@ -1,7 +1,10 @@
 /**
  * Browser side of the email login: the stored session, the "code is on its
- * way" state that survives a reload, and the two HTTP calls.
+ * way" state that survives a reload, and the two HTTP calls. Only a host
+ * logs in; everyone else joins as a guest with a key kept in this browser.
  */
+
+export { roomCodeInput } from './room-code';
 
 export interface SessionUser {
   id: string;
@@ -53,10 +56,16 @@ export interface AuthClient {
   requestLoginCode(email: string): Promise<RequestCodeResponse>;
   verifyLoginCode(email: string, code: string, challenge: string): Promise<VerifyCodeResponse>;
   /**
+   * This browser's guest key: random, made once and kept. It decides which
+   * seat a player who did not log in gets back after a reload. Never show it
+   * to others — the server only ever shares a hash of it.
+   */
+  guestKey(): string;
+  /**
    * For `io(url, { auth: authClient.socketAuth })`. Socket.IO calls it on
    * every (re)connect, so a fresh login takes effect on the next handshake.
    */
-  socketAuth(cb: (data: { token: string | null }) => void): void;
+  socketAuth(cb: (data: { token: string | null; guest: string }) => void): void;
 }
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
@@ -64,6 +73,7 @@ const PENDING_TTL_MS = 10 * 60 * 1000;
 export function createAuthClient({ storagePrefix, serverUrl }: AuthClientOptions): AuthClient {
   const SESSION_KEY = `${storagePrefix}.session.v1`;
   const PENDING_KEY = `${storagePrefix}.pendingLogin.v1`;
+  const GUEST_KEY = `${storagePrefix}.guest.v1`;
   const base = serverUrl.replace(/\/+$/, '');
 
   /*
@@ -73,6 +83,24 @@ export function createAuthClient({ storagePrefix, serverUrl }: AuthClientOptions
    */
   let memSession: Session | null = null;
   let memPending: PendingLogin | null = null;
+  let memGuest: string | null = null;
+
+  function guestKey(): string {
+    if (memGuest) return memGuest;
+    try {
+      const stored = localStorage.getItem(GUEST_KEY);
+      if (stored && /^[A-Za-z0-9_-]{16,128}$/.test(stored)) return (memGuest = stored);
+    } catch {
+      /* private window: the key lasts as long as the tab */
+    }
+    memGuest = randomKey();
+    try {
+      localStorage.setItem(GUEST_KEY, memGuest);
+    } catch {
+      /* memGuest carries it */
+    }
+    return memGuest;
+  }
 
   function loadSession(): Session | null {
     try {
@@ -140,6 +168,19 @@ export function createAuthClient({ storagePrefix, serverUrl }: AuthClientOptions
     requestLoginCode: (email) => post<RequestCodeResponse>('/auth/request', { email }),
     verifyLoginCode: (email, code, challenge) =>
       post<VerifyCodeResponse>('/auth/verify', { email, code, challenge }),
-    socketAuth: (cb) => cb({ token: loadSession()?.token ?? null }),
+    guestKey,
+    socketAuth: (cb) => cb({ token: loadSession()?.token ?? null, guest: guestKey() }),
   };
+}
+
+/** 22 url-safe characters, 128+ bits. */
+function randomKey(): string {
+  const bytes = new Uint8Array(16);
+  const c = globalThis.crypto;
+  if (c?.getRandomValues) c.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let out = '';
+  for (const b of bytes) out += abc[b & 63] + abc[b >> 6];
+  return out.slice(0, 22);
 }

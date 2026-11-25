@@ -5,7 +5,19 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 
-import { createAuth, authHandler, authError, originPolicy, socketAuth, NEED_LOGIN, NOT_HOST } from '../src/server';
+import {
+  createAuth,
+  authHandler,
+  authError,
+  guestId,
+  originPolicy,
+  seatId,
+  socketAuth,
+  NEED_LOGIN,
+  NOT_HOST,
+  NOT_A_HOST_EMAIL,
+} from '../src/server';
+import { roomCodeInput } from '../src/client';
 import { cleanAccent, cleanBrand, createSendCodeHandler, loginEmail } from '../src/relay';
 
 const devEnv = (extra: Record<string, string> = {}) => ({ NODE_ENV: 'test', SESSION_SECRET: 's3cret', ...extra });
@@ -95,14 +107,35 @@ test('HOST_EMAILS restricts hosting', async () => {
   const auth = createAuth({ brand: 'TEST', env: devEnv({ HOST_EMAILS: 'Boss@b.co, other@b.co' }) });
   assert.equal(auth.hostingIsRestricted(), true);
   const boss = (await login(auth, 'boss@b.co')).ver;
-  const guest = (await login(auth, 'guest@b.co')).ver;
-  assert.ok(boss.ok && guest.ok);
+  assert.ok(boss.ok);
   assert.equal(boss.user.canHost, true);
-  assert.equal(guest.user.canHost, false);
   assert.equal(authError(null), NEED_LOGIN);
-  assert.equal(authError(guest.user), undefined);
-  assert.equal(authError(guest.user, { host: true }), NOT_HOST);
+  assert.equal(authError(null, { host: true }), NEED_LOGIN);
   assert.equal(authError(boss.user, { host: true }), undefined);
+
+  // Players join without logging in, so other addresses get no mail at all.
+  const guest = await auth.requestCode('guest@b.co', 'ip');
+  assert.ok(!guest.ok);
+  assert.equal(guest.error, NOT_A_HOST_EMAIL);
+
+  // A token from before the restriction still works, but cannot host.
+  const open = createAuth({ brand: 'TEST', env: devEnv() });
+  const old = (await login(open, 'guest@b.co')).ver;
+  assert.ok(old.ok);
+  const user = auth.verifyToken(old.token);
+  assert.ok(user && !user.canHost);
+  assert.equal(authError(user, { host: true }), NOT_HOST);
+});
+
+test('guest seats: stable, opaque, and validated', () => {
+  const key = 'abcdefghijklmnopqrstuv';
+  assert.match(guestId(key)!, /^g_.{16}$/);
+  assert.equal(guestId(key), guestId(key));
+  assert.notEqual(guestId(key), guestId(key + 'w'));
+  assert.ok(!guestId(key)!.includes(key));
+  for (const bad of [undefined, null, 42, '', 'short', 'has space in it!!!!', 'x'.repeat(129)]) {
+    assert.equal(guestId(bad), null);
+  }
 });
 
 test('production without a mailer refuses to log anyone in', async () => {
@@ -216,9 +249,53 @@ test('socketAuth puts the user on socket.data', async () => {
   socketAuth(auth)(socket, () => (called = true));
   assert.ok(called);
   assert.equal(socket.data.user.email, 's@b.co');
+  assert.equal(seatId(socket), ver.user.id);
   const anon = { handshake: { auth: {} }, data: undefined as any };
   socketAuth(auth)(anon, () => {});
   assert.equal(anon.data.user, null);
+  assert.equal(seatId(anon), null);
+
+  // No login, but a guest key: seated as a guest.
+  const key = 'k'.repeat(22);
+  const guest = { handshake: { auth: { token: null, guest: key } }, data: {} as any };
+  socketAuth(auth)(guest, () => {});
+  assert.equal(guest.data.user, null);
+  assert.equal(seatId(guest), guestId(key));
+  // Logged in and a guest key: the account wins, so a host keeps one seat across devices.
+  const both = { handshake: { auth: { token: ver.token, guest: key } }, data: {} as any };
+  socketAuth(auth)(both, () => {});
+  assert.equal(seatId(both), ver.user.id);
+});
+
+test('roomCodeInput undoes Vietnamese Telex rewrites', () => {
+  // the reported bug: a lone w becomes ư
+  assert.equal(roomCodeInput('ư', ''), 'W');
+  assert.equal(roomCodeInput('Ư', ''), 'W');
+  assert.equal(roomCodeInput('ABư', 'AB'), 'ABW');
+  // a key that rewrites a letter already in the box
+  assert.equal(roomCodeInput('Ư', 'U'), 'UW');
+  assert.equal(roomCodeInput('Â', 'A'), 'AA');
+  assert.equal(roomCodeInput('Ă', 'A'), 'AW');
+  assert.equal(roomCodeInput('Đ', 'D'), 'DD');
+  assert.equal(roomCodeInput('XÊ', 'XE'), 'XEE');
+  // tone keys, also when the tone lands on an earlier vowel
+  assert.equal(roomCodeInput('Á', 'A'), 'AS');
+  assert.equal(roomCodeInput('ÁN', 'AN'), 'ANS');
+  assert.equal(roomCodeInput('BÀ', 'BA'), 'BAF');
+  assert.equal(roomCodeInput('Ả', 'A'), 'AR');
+  assert.equal(roomCodeInput('Ã', 'A'), 'AX');
+  assert.equal(roomCodeInput('Ạ', 'A'), 'AJ');
+  // edits in the middle keep the rest, and the caret says where the key went
+  assert.equal(roomCodeInput('AưB', 'AB'), 'AWB');
+  assert.equal(roomCodeInput('ÂB', 'AB', 4, 1), 'AAB');
+  assert.equal(roomCodeInput('ÁN2', 'AN2', 4, 2), 'ANS2');
+  // plain typing, pasting, lower case, junk, and the length cap
+  assert.equal(roomCodeInput('ab', 'A'), 'AB');
+  assert.equal(roomCodeInput(' 7k-2q ', ''), '7K2Q');
+  assert.equal(roomCodeInput('ABCDE', 'ABCD'), 'ABCD');
+  assert.equal(roomCodeInput('ABCư', 'ABC'), 'ABCW');
+  assert.equal(roomCodeInput('ABCDư', 'ABCD'), 'ABCD');
+  assert.equal(roomCodeInput('ABCDEF', '', 6), 'ABCDEF');
 });
 
 test('originPolicy: empty means any, patterns and normalization', () => {

@@ -61,6 +61,16 @@ interface Auth {
     /** Which provider sends the codes: 'relay' | 'brevo' | 'resend' | 'smtp' | 'console' | 'none'. */
     mailerName: string;
 }
+/** requestCode's answer for an address that is not in HOST_EMAILS. */
+declare const NOT_A_HOST_EMAIL = "Email n\u00E0y kh\u00F4ng c\u00F3 quy\u1EC1n t\u1EA1o ph\u00F2ng. Ng\u01B0\u1EDDi ch\u01A1i kh\u00F4ng c\u1EA7n \u0111\u0103ng nh\u1EADp: ch\u1EC9 c\u1EA7n nh\u1EADp t\u00EAn v\u00E0 m\u00E3 ph\u00F2ng \u0111\u1EC3 v\u00E0o.";
+/**
+ * The seat id of a player who joined without logging in. The browser keeps a
+ * random key that never leaves it except in the socket handshake; only this
+ * hash of it is ever shown to other players, so nobody can take over a seat
+ * by copying the id from the room state. No secret needed, and it survives a
+ * SESSION_SECRET change.
+ */
+declare function guestId(rawKey: unknown): string | null;
 declare function normalizeEmail(raw: unknown): string | null;
 declare function createAuth(options: AuthOptions): Auth;
 
@@ -116,23 +126,34 @@ interface HandshakeSocket {
     data: unknown;
 }
 /**
- * `io.use(socketAuth(auth))`: anyone may connect, but `socket.data.user` is
- * only set for a valid token. The client sends it as `io(url, { auth: { token } })`.
+ * `io.use(socketAuth(auth))`: anyone may connect. `socket.data.user` is only
+ * set for a valid login token; `socket.data.guestId` comes from the browser's
+ * guest key. The client sends both as `io(url, { auth: authClient.socketAuth })`.
  */
 declare function socketAuth(auth: Auth): (socket: HandshakeSocket, next: (err?: Error) => void) => void;
 /** The signed-in user of a socket that went through socketAuth, or null. */
 declare function socketUser(socket: {
     data: unknown;
 }): User | null;
-declare const NEED_LOGIN = "B\u1EA1n c\u1EA7n \u0111\u0103ng nh\u1EADp tr\u01B0\u1EDBc";
+/**
+ * Who sits down at the table: the account id when logged in (so a host keeps
+ * their seat across devices), otherwise this browser's guest id. Null only
+ * for a client too old to send a guest key — see NO_SEAT.
+ */
+declare function seatId(socket: {
+    data: unknown;
+}): string | null;
+declare const NEED_LOGIN = "Ch\u1EC9 ch\u1EE7 ph\u00F2ng m\u1EDBi t\u1EA1o \u0111\u01B0\u1EE3c ph\u00F2ng \u2014 h\u00E3y \u0111\u0103ng nh\u1EADp b\u1EB1ng email ch\u1EE7 ph\u00F2ng";
 declare const NOT_HOST = "T\u00E0i kho\u1EA3n n\u00E0y ch\u1EC9 \u0111\u01B0\u1EE3c v\u00E0o b\u00E0n, kh\u00F4ng \u0111\u01B0\u1EE3c t\u1EA1o b\u00E0n";
+/** seatId() came back null: the page is an old build that sends no guest key. */
+declare const NO_SEAT = "Trang \u0111\u00E3 c\u0169, h\u00E3y t\u1EA3i l\u1EA1i trang r\u1ED3i v\u00E0o l\u1EA1i";
 /**
  * Why this user may not go on, or undefined if they may — so it drops
  * straight into an ack's `error?: string`. Pass `{ host: true }` for
- * creating a room; joining only needs a login.
+ * creating a room. Joining needs no login: use seatId() for the seat.
  */
 declare function authError(user: User | null | undefined, opts?: {
     host?: boolean;
 }): string | undefined;
 
-export { type Auth, type AuthHandlerOptions, type AuthOptions, NEED_LOGIN, NOT_HOST, type OriginPolicy, type RequestResult, type User, type VerifyResult, authError, authHandler, createAuth, normalizeEmail, originPolicy, socketAuth, socketUser };
+export { type Auth, type AuthHandlerOptions, type AuthOptions, NEED_LOGIN, NOT_A_HOST_EMAIL, NOT_HOST, NO_SEAT, type OriginPolicy, type RequestResult, type User, type VerifyResult, authError, authHandler, createAuth, guestId, normalizeEmail, originPolicy, seatId, socketAuth, socketUser };
